@@ -1,0 +1,137 @@
+---
+# Source: retail-app/templates/userprofile-secret.yml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: userprofile-secret
+type: Opaque
+data:
+  SESSION_SECRET: MTIzNA==
+  EMAIL_USER: Y2hhZ2FudHl0ZWphMjUwMkBnbWFpbC5jb20=
+  EMAIL_PASS: eXhvcS1ianVrLXJkbnQtYWx6cA==
+---
+# Source: retail-app/templates/argo-rollouts-dashboard-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: argo-rollouts-dashboard
+  namespace: argo-rollouts
+spec:
+  selector:
+    app: argo-rollouts
+  ports:
+    - name: http
+      port: 3100
+      targetPort: 3100
+  type: LoadBalancer  # Change to NodePort if needed
+---
+# Source: retail-app/templates/mongodb-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-deployment
+spec:
+  selector:
+    app: mongodb-deployment
+  ports:
+    - port: 27017
+      targetPort: 27017
+      protocol: TCP
+---
+# Source: retail-app/templates/usernode-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: userprofile-active-service
+spec:
+  type: LoadBalancer
+  selector:
+    app: userprofile
+  ports:
+    - port: 3130
+      targetPort: 3130
+      protocol: TCP
+---
+# Source: retail-app/templates/usernode-service.yml
+apiVersion: v1
+kind: Service
+metadata:
+  name: userprofile-preview-service
+spec:
+  type: ClusterIP
+  selector:
+    app: userprofile
+  ports:
+    - port: 3130
+      targetPort: 3130
+      protocol: TCP
+---
+# Source: retail-app/templates/mongodb-deployment.yml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mongodb-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: mongodb-deployment
+  template:
+    metadata:
+      labels:
+        app: mongodb-deployment
+    spec:
+      containers:
+        - name: mongodb-deployment
+          image: "mongo:latest"
+          ports:
+            - containerPort: 27017
+          env:
+            - name: MONGO_INITDB_DATABASE
+              value: "myDatabase"
+---
+# Source: retail-app/templates/userprofile-rollout.yml
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: userprofile-rollout
+spec:
+  replicas: 2
+  strategy:
+    blueGreen:
+      activeService: userprofile-active-service
+      previewService: userprofile-preview-service
+      autoPromotionEnabled: false  # Set to true for automatic rollout
+  selector:
+    matchLabels:
+      app: userprofile
+  template:
+    metadata:
+      labels:
+        app: userprofile
+    spec:
+      containers:
+        - name: userprofile
+          image: jeevanc31/aws-retail-app:v1.4.0
+          ports:
+            - containerPort: 3130
+          env:
+            - name: MONGODB_URI
+              value: "mongodb://mongodb-deployment:27017/myDatabase"
+            - name: SESSION_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: userprofile-secret
+                  key: SESSION_SECRET
+            - name: EMAIL_USER
+              valueFrom:
+                secretKeyRef:
+                  name: userprofile-secret
+                  key: EMAIL_USER
+            - name: EMAIL_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: userprofile-secret
+                  key: EMAIL_PASS
+            - name: PORT
+              value: "3130"
