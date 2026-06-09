@@ -6,7 +6,7 @@ on:
       - main
 
 env:
-  DOCKER_IMAGE: ${{ secrets.DOCKER_USERNAME }}/aws-retail-app
+  DOCKER_IMAGE: 16akash/aws-retail-app
   DOCKER_TAG: v1.4.0
 
 jobs:
